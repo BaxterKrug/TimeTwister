@@ -21,8 +21,8 @@ TimeTwister is a lightweight Flask application for running live events. It lets 
 
 ```bash
 # Clone the repository (or copy it to the target machine)
-git clone https://github.com/<your-account>/EventManager.git
-cd EventManager
+git clone https://github.com/<your-account>/TimeTwister.git
+cd TimeTwister
 
 # Create and activate a virtual environment
 python3 -m venv .venv
@@ -54,8 +54,8 @@ The production setup assumes a Raspberry Pi (any 64-bit model running Raspberry 
 2. **Clone and install**
 
    ```bash
-   git clone https://github.com/<your-account>/EventManager.git
-   cd EventManager
+   git clone https://github.com/<your-account>/TimeTwister.git
+   cd TimeTwister
    python3 -m venv .venv
    source .venv/bin/activate
    pip install --upgrade pip
@@ -65,8 +65,8 @@ The production setup assumes a Raspberry Pi (any 64-bit model running Raspberry 
 3. **Launch the server**
 
    ```bash
-   source /home/pi/EventManager/.venv/bin/activate
-   python /home/pi/EventManager/main.py
+   source /home/pi/TimeTwister/.venv/bin/activate
+   python /home/pi/TimeTwister/main.py
    ```
 
    By default the app binds to `0.0.0.0:8000`. Leave this terminal running while the app is in use. For unattended service, create a `systemd` unit or use a process manager such as `supervisor` to run the same command at boot.
@@ -88,7 +88,7 @@ The production setup assumes a Raspberry Pi (any 64-bit model running Raspberry 
 
 6. **Persist uploads**
 
-   The Pi stores uploaded images in `EventManager/uploads/`. Back up this directory if you rebuild the Pi or deploy from scratch.
+   The Pi stores uploaded images in `TimeTwister/uploads/`. Back up this directory if you rebuild the Pi or deploy from scratch.
 
 ## Deployment Notes
 
