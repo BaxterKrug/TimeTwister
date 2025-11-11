@@ -1,0 +1,490 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Event Control</title>
+  <style>
+    body {
+      font-family: system-ui, sans-serif;
+      background: #0f172a;
+      color: #e5e7eb;
+      margin: 0;
+      padding: 20px;
+    }
+    h1, h2, h3 { margin: 0.2em 0; }
+    a { color: #38bdf8; }
+    .container { max-width: 1200px; margin: 0 auto; }
+    .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+    .header a {
+        padding: 8px 15px;
+        background: #38bdf8;
+        color: #020817;
+        text-decoration: none;
+        border-radius: 5px;
+        font-weight: bold;
+    }
+    .event-configs { display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 20px; }
+    .event-card {
+      border: 1px solid #1f2937;
+      background: #111827;
+      padding: 15px;
+      border-radius: 8px;
+    }
+    label { display: block; width: 100%; font-size: 0.9em; color: #9ca3af; margin-bottom: 5px; }
+    input[type="number"], input[type="text"] {
+      background: #030712;
+      border: 1px solid #374151;
+      border-radius: 4px;
+      color: #e5e7eb;
+      padding: 8px 10px;
+      font-size: 1em;
+      width: calc(100% - 22px);
+      margin-bottom: 10px;
+    }
+    button {
+      margin: 5px 2px;
+      padding: 8px 12px;
+      border-radius: 4px;
+      border: none;
+      font-size: 0.9em;
+      cursor: pointer;
+      background: #38bdf8;
+      color: #020817;
+      font-weight: 500;
+    }
+    button.secondary { background: #4b5563; color: #e5e7eb; }
+    .row { margin: 10px 0; }
+    .presets span { font-size: 0.9em; color: #9ca3af; margin-right: 8px; }
+    #add-event {
+        margin-top: 20px;
+        padding: 10px 20px;
+        font-size: 1.1em;
+        background: #16a34a;
+        color: #fff;
+    }
+    .feature-toggle {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      background: rgba(59, 130, 246, 0.12);
+      border: 1px solid rgba(59, 130, 246, 0.25);
+      border-radius: 12px;
+      padding: 10px 14px;
+      margin-bottom: 10px;
+    }
+    .feature-label { font-size: 0.95em; color: #bfdbfe; font-weight: 600; letter-spacing: 0.02em; }
+    .feature-button {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 16px;
+      border-radius: 999px;
+      background: #1f2937;
+      color: #e5e7eb;
+      border: 1px solid #374151;
+      font-size: 0.95em;
+      cursor: pointer;
+      transition: background 0.15s ease, color 0.15s ease;
+    }
+    .feature-button.active {
+      background: linear-gradient(135deg, #22d3ee, #0ea5e9);
+      color: #020817;
+      border-color: #38bdf8;
+      box-shadow: 0 0 12px rgba(14, 165, 233, 0.35);
+      font-weight: 700;
+    }
+    .feature-icon {
+      font-size: 1.05em;
+    }
+    .feature-text {
+      font-weight: 600;
+    }
+    .feature-status {
+      font-size: 0.8em;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      opacity: 0.85;
+    }
+    .feature-button:hover {
+      border-color: #60a5fa;
+    }
+    .row.muted { color: #9ca3af; font-size: 0.85em; }
+  </style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <h1>Event Control Panel</h1>
+        <a href="/display" target="_blank">Go to Display</a>
+    </div>
+    <div id="event-configs" class="event-configs"></div>
+    <button id="add-event" onclick="addEvent()">+ Add Event</button>
+</div>
+
+<script>
+let state = { timers: {} };
+const PRESETS = [50, 40, 30, 20, 10];
+let fetchInterval;
+const MAX_IMAGE_SIZE = 3 * 1024 * 1024; // 3MB limit keeps uploads quick
+
+function featureButton(id, feature, enabled, label) {
+  const buttonClass = enabled ? 'feature-button active' : 'feature-button';
+  const statusText = enabled ? 'On' : 'Off';
+  const icon = enabled ? '🟢' : '⚪';
+  return `<button type="button" class="${buttonClass}" data-feature="${feature}" data-enabled="${enabled}" title="Toggle ${label}"><span class="feature-icon">${icon}</span><span class="feature-text">${label}</span><span class="feature-status">${statusText}</span></button>`;
+}
+
+function startFetching() {
+    if (!fetchInterval) {
+        fetchInterval = setInterval(fetchState, 2000);
+    }
+}
+
+function stopFetching() {
+    if (fetchInterval) {
+        clearInterval(fetchInterval);
+        fetchInterval = null;
+    }
+}
+
+function fetchState() {
+  return fetch('/api/state')
+    .then(r => r.json())
+    .then(data => {
+      state = data;
+      render();
+    });
+}
+
+function render() {
+  const container = document.getElementById('event-configs');
+  const ids = Object.keys(state.timers);
+
+  if (ids.length === 0) {
+    addEvent();
+    return;
+  }
+
+  const existing = new Map(Array.from(container.querySelectorAll('.event-card')).map(card => [card.dataset.timerId, card]));
+  const orderedCards = [];
+
+  ids.sort((a, b) => Number(a) - Number(b));
+  ids.forEach(id => {
+    const timer = state.timers[id];
+    if (!timer) {
+      return;
+    }
+    let card = existing.get(id);
+    if (!card) {
+      card = createEventCard(id);
+    }
+    updateEventCard(card, timer, id);
+    existing.delete(id);
+    orderedCards.push(card);
+  });
+
+  existing.forEach(card => card.remove());
+
+  orderedCards.forEach((card, index) => {
+    const current = container.children[index];
+    if (current !== card) {
+      container.insertBefore(card, current || null);
+    }
+  });
+
+  const addButton = document.getElementById('add-event');
+  if (addButton) {
+    addButton.style.display = ids.length < 3 ? 'inline-block' : 'none';
+  }
+}
+
+function createEventCard(id) {
+  const card = document.createElement('div');
+  card.className = 'event-card';
+  card.dataset.timerId = id;
+
+  const featureButtonsMarkup = `${featureButton(id, 'timer', true, 'Timer')} ${featureButton(id, 'message', true, 'Announcements')}`;
+  const presetsMarkup = PRESETS.map(m => `<button onclick="startPreset(${id}, ${m})">${m}m</button>`).join('');
+
+  card.innerHTML = `
+    <h3 class="event-title" data-role="header"></h3>
+    <div class="row">
+      <label>Event Name:</label>
+      <input type="text" id="label_${id}" placeholder="Event name" onfocus="stopFetching()" onblur="updateLabel(${id}); startFetching();">
+    </div>
+    <div class="row feature-toggle">
+      <span class="feature-label">Features:</span>
+      ${featureButtonsMarkup}
+    </div>
+    <div data-role="timer-wrapper">
+      <div class="row" data-role="timer-controls">
+        <label>Timer (minutes):</label>
+        <input type="number" id="min_${id}" placeholder="e.g., 50" min="0" onfocus="stopFetching()" onblur="startFetching()">
+        <button onclick="startTimer(${id})">Start</button>
+        <button class="secondary" onclick="stopTimer(${id})">Pause</button>
+        <button class="secondary" onclick="resetTimer(${id})">Reset</button>
+      </div>
+      <div class="row presets" data-role="timer-presets">
+        <span>Presets:</span>
+        ${presetsMarkup}
+      </div>
+      <div class="row" data-role="timer-status"><strong></strong></div>
+      <div class="row muted" data-role="timer-disabled" style="display:none;">Timer disabled for this event.</div>
+    </div>
+    <div data-role="message-wrapper">
+      <div class="row" data-role="message-section">
+        <label>Announcement / Quick Message:</label>
+        <input type="text" id="msg_${id}" placeholder="e.g., Pairings are up!" onfocus="stopFetching()" onblur="startFetching()">
+        <button onclick="setMessage(${id})">Set</button>
+        <button class="secondary" onclick="clearMessage(${id})">Clear</button>
+      </div>
+      <div class="row muted" data-role="message-disabled" style="display:none;">Announcements disabled for this event.</div>
+    </div>
+    <div class="row" data-role="image-input">
+      <label>Display Image (png, jpg, gif):</label>
+      <input type="file" accept="image/png,image/jpeg,image/gif" onchange="handleImageUpload(event, ${id})">
+    </div>
+    <div class="row image-preview" data-role="image-preview">
+      <div class="placeholder">No image uploaded</div>
+    </div>
+    <div class="row">
+      <button class="secondary" data-role="clear-image" onclick="clearImage(${id})" style="display:none;">Remove Image</button>
+    </div>
+    <div class="row">
+      <button class="danger" onclick="removeEvent(${id})">Remove Event</button>
+    </div>
+  `;
+
+  const featureButtons = {};
+  card.querySelectorAll('button[data-feature]').forEach(button => {
+    const feature = button.dataset.feature;
+    featureButtons[feature] = button;
+    button.addEventListener('click', () => {
+      const enabled = button.dataset.enabled === 'true';
+      toggleFeature(id, feature, !enabled);
+    });
+  });
+
+  card._refs = {
+    header: card.querySelector('[data-role="header"]'),
+    labelInput: card.querySelector(`#label_${id}`),
+    featureButtons,
+    timerControls: card.querySelector('[data-role="timer-controls"]'),
+    timerPresets: card.querySelector('[data-role="timer-presets"]'),
+    timerStatusRow: card.querySelector('[data-role="timer-status"]'),
+    timerStatusLabel: card.querySelector('[data-role="timer-status"] strong'),
+    timerDisabled: card.querySelector('[data-role="timer-disabled"]'),
+    messageSection: card.querySelector('[data-role="message-section"]'),
+    messageInput: card.querySelector(`#msg_${id}`),
+    messageDisabled: card.querySelector('[data-role="message-disabled"]'),
+    imagePreview: card.querySelector('[data-role="image-preview"]'),
+    clearImageButton: card.querySelector('[data-role="clear-image"]')
+  };
+
+  return card;
+}
+
+function updateEventCard(card, timer, id) {
+  const refs = card._refs;
+  if (!refs) {
+    return;
+  }
+
+  const features = Object.assign({ timer: true, message: true }, timer.features || {});
+  const labelValue = timer.label || '';
+  const headerText = labelValue || 'New Event';
+  refs.header.textContent = `Event: ${headerText}`;
+
+  if (document.activeElement !== refs.labelInput) {
+    refs.labelInput.value = labelValue;
+  }
+
+  updateFeatureButton(refs.featureButtons.timer, features.timer, 'Timer');
+  updateFeatureButton(refs.featureButtons.message, features.message, 'Announcements');
+
+  if (features.timer) {
+    if (refs.timerControls) refs.timerControls.style.display = '';
+    if (refs.timerPresets) refs.timerPresets.style.display = '';
+    if (refs.timerStatusRow) refs.timerStatusRow.style.display = '';
+    if (refs.timerDisabled) refs.timerDisabled.style.display = 'none';
+    const runningLabel = timer.running ? 'Running' : 'Stopped';
+    const timeDisplay = timer.display_remaining || '00:00';
+    if (refs.timerStatusLabel) {
+      refs.timerStatusLabel.textContent = `Current Time: ${timeDisplay} (${runningLabel})`;
+    }
+  } else {
+    if (refs.timerControls) refs.timerControls.style.display = 'none';
+    if (refs.timerPresets) refs.timerPresets.style.display = 'none';
+    if (refs.timerStatusRow) refs.timerStatusRow.style.display = 'none';
+    if (refs.timerDisabled) refs.timerDisabled.style.display = '';
+  }
+
+  if (features.message) {
+    if (refs.messageSection) refs.messageSection.style.display = '';
+    if (refs.messageDisabled) refs.messageDisabled.style.display = 'none';
+    if (refs.messageInput && document.activeElement !== refs.messageInput) {
+      refs.messageInput.value = timer.message || '';
+    }
+  } else {
+    if (refs.messageSection) refs.messageSection.style.display = 'none';
+    if (refs.messageDisabled) refs.messageDisabled.style.display = '';
+  }
+
+  if (timer.image_url) {
+    if (refs.imagePreview) {
+      let img = refs.imagePreview.querySelector('img');
+      if (!img) {
+        img = document.createElement('img');
+        refs.imagePreview.innerHTML = '';
+        refs.imagePreview.appendChild(img);
+      }
+      if (img.getAttribute('src') !== timer.image_url) {
+        img.setAttribute('src', timer.image_url);
+      }
+      img.setAttribute('alt', timer.label || '');
+    }
+    if (refs.clearImageButton) {
+      refs.clearImageButton.style.display = 'inline-block';
+    }
+  } else {
+    if (refs.imagePreview && !refs.imagePreview.querySelector('.placeholder')) {
+      refs.imagePreview.innerHTML = '<div class="placeholder">No image uploaded</div>';
+    }
+    if (refs.clearImageButton) {
+      refs.clearImageButton.style.display = 'none';
+    }
+  }
+}
+
+function updateFeatureButton(button, enabled, label) {
+  if (!button) {
+    return;
+  }
+  button.dataset.enabled = String(enabled);
+  button.classList.toggle('active', enabled);
+  const icon = button.querySelector('.feature-icon');
+  const status = button.querySelector('.feature-status');
+  if (icon) {
+    icon.textContent = enabled ? '🟢' : '⚪';
+  }
+  if (status) {
+    status.textContent = enabled ? 'On' : 'Off';
+  }
+  button.title = `Toggle ${label}`;
+}
+
+function post(path, body) {
+  return fetch(path, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(body || {})
+  }).then(r => r.json()).then(fetchState);
+}
+
+function toggleFeature(id, feature, enabled) {
+  stopFetching();
+  post('/api/timer/' + id + '/feature', {feature, enabled})
+    .finally(() => startFetching());
+}
+
+function addEvent() {
+    if (Object.keys(state.timers).length < 3) {
+        post('/api/timers/add');
+    }
+}
+
+function removeEvent(id) {
+    if (confirm('Are you sure you want to remove this event?')) {
+        post('/api/timer/' + id + '/remove');
+    }
+}
+
+function updateLabel(id) {
+  const label = document.getElementById('label_'+id).value;
+  post('/api/timer/' + id + '/label', {label});
+}
+
+function startTimer(id) {
+  const m = parseInt(document.getElementById('min_'+id).value || '0', 10);
+  const duration = m * 60;
+  post('/api/timer/' + id + '/start', {duration});
+}
+
+function startPreset(id, minutes) {
+  const duration = minutes * 60;
+  post('/api/timer/' + id + '/start', {duration});
+}
+
+function stopTimer(id) {
+  post('/api/timer/' + id + '/stop');
+}
+
+function resetTimer(id) {
+  post('/api/timer/' + id + '/reset');
+}
+
+function setMessage(id) {
+  const input = document.getElementById('msg_'+id);
+  if (!input) {
+    return;
+  }
+  const message = input.value;
+  post('/api/timer/' + id + '/message', {message});
+}
+
+function clearMessage(id) {
+  const input = document.getElementById('msg_'+id);
+  if (input) {
+    input.value = "";
+  }
+  post('/api/timer/' + id + '/message', {message: ""});
+}
+
+function handleImageUpload(event, id) {
+  const file = event.target.files && event.target.files[0];
+  if (!file) {
+    return;
+  }
+  if (file.size > MAX_IMAGE_SIZE) {
+    alert('Image is too large. Please choose a file under 3MB.');
+    event.target.value = '';
+    return;
+  }
+  const formData = new FormData();
+  formData.append('image', file);
+  stopFetching();
+  fetch('/api/timer/' + id + '/image', { method: 'POST', body: formData })
+    .then(r => r.json())
+    .then(resp => {
+      if (!resp.ok) {
+        alert(resp.error || 'Upload failed.');
+      }
+      fetchState();
+    })
+    .catch(() => alert('Upload failed.'))
+    .finally(() => {
+      event.target.value = '';
+      startFetching();
+    });
+}
+
+function clearImage(id) {
+  stopFetching();
+  fetch('/api/timer/' + id + '/image', { method: 'DELETE' })
+    .then(r => r.json())
+    .then(() => fetchState())
+    .finally(() => startFetching());
+}
+
+startFetching();
+fetchState();
+</script>
+<style>
+  button.danger { background-color: #dc2626; color: white; }
+  .image-preview { display: flex; justify-content: center; align-items: center; min-height: 140px; padding: 12px; border: 1px dashed #1d4ed8; border-radius: 8px; background: rgba(30, 64, 175, 0.18); }
+  .image-preview img { max-width: 100%; max-height: 240px; border-radius: 6px; }
+  .image-preview .placeholder { color: #64748b; font-size: 0.9em; }
+</style>
+</body>
+</html>

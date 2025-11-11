@@ -1,0 +1,205 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Event Display</title>
+  <style>
+    html, body {
+      margin: 0; padding: 0;
+      width: 100%; height: 100%;
+      background: #020817;
+      color: #e5e7eb;
+      font-family: system-ui, sans-serif;
+      overflow: hidden;
+    }
+    .wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      padding: 3vh 4vw;
+      box-sizing: border-box;
+    }
+    .events-grid {
+        display: flex;
+        justify-content: space-around;
+        align-items: stretch;
+        flex-wrap: wrap;
+        gap: 4vw;
+        width: 100%;
+        height: 100%;
+    }
+    .event-display {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        text-align: center;
+        padding: 2vw;
+        min-width: 300px;
+    }
+    .event-name {
+      font-size: 3vw;
+      font-weight: bold;
+      color: #38bdf8;
+      margin-bottom: 2vh;
+    }
+    .time {
+      font-size: 10vw;
+      font-weight: 700;
+      line-height: 1;
+    }
+    .message {
+      font-size: 2.5vw;
+      margin-top: 3vh;
+      min-height: 4vh;
+      color: #f97316;
+      word-wrap: break-word;
+    }
+    .time.hidden { display: none; }
+  .message.hidden { display: none; }
+  .image { margin-top: 3vh; display: none; }
+  .image img { max-width: 60vw; max-height: 35vh; border-radius: 1vw; box-shadow: 0 10px 30px rgba(15, 23, 42, 0.45); }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <div id="events-grid" class="events-grid"></div>
+</div>
+<script>
+function fetchState() {
+  fetch('/api/state')
+    .then(r => r.json())
+    .then(data => {
+      renderTimers(data.timers || {});
+    });
+}
+
+function renderTimers(timers) {
+  const grid = document.getElementById('events-grid');
+  const timerIds = Object.keys(timers);
+
+  if (timerIds.length === 0) {
+    grid.dataset.mode = 'empty';
+    grid.style.flexDirection = 'column';
+    grid.innerHTML = '';
+    const empty = document.createElement('div');
+    empty.className = 'event-display';
+    empty.innerHTML = '<div class="event-name">No events configured</div>';
+    grid.appendChild(empty);
+    return;
+  }
+
+  if (grid.dataset.mode !== 'timers') {
+    grid.innerHTML = '';
+    grid.dataset.mode = 'timers';
+  }
+
+  grid.style.flexDirection = timerIds.length > 1 ? 'row' : 'column';
+
+  const existing = new Map();
+  Array.from(grid.querySelectorAll('[data-timer-id]')).forEach(node => {
+    existing.set(node.dataset.timerId, node);
+  });
+
+  const orderedCards = [];
+  timerIds
+    .sort((a, b) => Number(a) - Number(b))
+    .forEach(id => {
+      const timer = timers[id];
+      if (!timer) {
+        return;
+      }
+      let card = existing.get(id);
+      if (!card) {
+        card = createCard(id);
+      }
+      updateCard(card, timer);
+      existing.delete(id);
+      orderedCards.push(card);
+    });
+
+  existing.forEach(node => node.remove());
+
+  orderedCards.forEach((card, index) => {
+    const current = grid.children[index];
+    if (current !== card) {
+      grid.insertBefore(card, current || null);
+    }
+  });
+}
+
+function createCard(id) {
+  const card = document.createElement('div');
+  card.className = 'event-display';
+  card.dataset.timerId = id;
+
+  const name = document.createElement('div');
+  name.className = 'event-name';
+  card.appendChild(name);
+
+  const time = document.createElement('div');
+  time.className = 'time';
+  card.appendChild(time);
+
+  const message = document.createElement('div');
+  message.className = 'message';
+  card.appendChild(message);
+
+  const image = document.createElement('div');
+  image.className = 'image';
+  card.appendChild(image);
+
+  return card;
+}
+
+function updateCard(card, timer) {
+  const features = Object.assign({ timer: true, message: true }, timer.features || {});
+  const nameEl = card.querySelector('.event-name');
+  const timeEl = card.querySelector('.time');
+  const messageEl = card.querySelector('.message');
+  const imageEl = card.querySelector('.image');
+
+  nameEl.textContent = timer.label || '';
+
+  if (features.timer) {
+    timeEl.textContent = timer.display_remaining || '';
+    timeEl.classList.remove('hidden');
+  } else {
+    timeEl.textContent = '';
+    timeEl.classList.add('hidden');
+  }
+
+  if (features.message) {
+    messageEl.textContent = timer.message || '';
+    messageEl.classList.remove('hidden');
+  } else {
+    messageEl.textContent = '';
+    messageEl.classList.add('hidden');
+  }
+
+  if (timer.image_url) {
+    let img = imageEl.querySelector('img');
+    if (!img) {
+      img = document.createElement('img');
+      imageEl.innerHTML = '';
+      imageEl.appendChild(img);
+    }
+    if (img.getAttribute('src') !== timer.image_url) {
+      img.setAttribute('src', timer.image_url);
+    }
+    img.setAttribute('alt', timer.label || '');
+    imageEl.style.display = 'block';
+  } else {
+    imageEl.innerHTML = '';
+    imageEl.style.display = 'none';
+  }
+}
+
+setInterval(fetchState, 1000);
+fetchState();
+</script>
+</body>
+</html>
