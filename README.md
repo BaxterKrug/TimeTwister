@@ -1,8 +1,8 @@
-# Event Manager
+# TimeTwister
 
 *SK R&D — 2025 Edition*
 
-EventManager is a lightweight Flask application for running live events. It lets staff control multiple event timers, post announcements, and display an optional image per event on a public-facing screen.
+TimeTwister is a lightweight Flask application for running live events. It lets staff control multiple event timers, post announcements, and display an optional image per event on a public-facing screen.
 
 ## Features
 
