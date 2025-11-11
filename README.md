@@ -1,4 +1,4 @@
-# EventManager
+# Event Manager
 
 *SK R&D — 2025 Edition*
 
