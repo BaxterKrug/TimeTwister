@@ -1,5 +1,7 @@
 # EventManager
 
+*SK R&D — 2025 Edition*
+
 EventManager is a lightweight Flask application for running live events. It lets staff control multiple event timers, post announcements, and display an optional image per event on a public-facing screen.
 
 ## Features
@@ -124,4 +126,4 @@ Creating a locked file (`requirements.lock`) is optional but useful for reproduc
 
 ## License
 
-Add licensing information here (e.g., MIT, proprietary). Replace this placeholder with your chosen license text or link.
+This project is released under the [GNU General Public License v3.0 (GPL-3.0)](LICENSE).
