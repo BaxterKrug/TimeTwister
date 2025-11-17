@@ -103,8 +103,7 @@ The production setup assumes a Raspberry Pi (any 64-bit model running Raspberry 
    - **Event Name** field: updates immediately on blur.
     - **Timer controls**: enter minutes and start, or tap one of the built-in presets
        (Pokemon, MTG, Yu-Gi-Oh, Weiss, Godzilla, Gundam, UA, FAB, Riftbound, FF) with the
-       configured tournament durations (MTG is 45 minutes; others follow each game's
-       standard round time).
+       configured tournament durations.
    - **Announcements**: type a quick message and click *Set*.
    - **Display Image**: upload a PNG/JPEG/GIF; click *Remove Image* to clear it.
     - **Feature toggles**: disable timer, announcements, or auto buzzer without deleting data.
