@@ -4,64 +4,131 @@
   <meta charset="utf-8">
   <title>Event Display</title>
   <style>
+    :root {
+      color-scheme: dark;
+    }
     html, body {
       margin: 0; padding: 0;
       width: 100%; height: 100%;
       background: #020817;
       color: #e5e7eb;
-      font-family: system-ui, sans-serif;
+      font-family: "Inter", system-ui, sans-serif;
       overflow: hidden;
     }
     .wrap {
       display: flex;
       flex-direction: column;
-      align-items: center;
+      align-items: stretch;
       justify-content: center;
       height: 100%;
-      padding: 3vh 4vw;
+      width: 100%;
+      padding: clamp(1.5vh, 3vh, 4vh) clamp(2vw, 4vw, 6vw);
       box-sizing: border-box;
     }
     .events-grid {
-        display: flex;
-        justify-content: space-around;
-        align-items: stretch;
-        flex-wrap: wrap;
-        gap: 4vw;
-        width: 100%;
-        height: 100%;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      grid-auto-rows: 1fr;
+      gap: clamp(2vh, 3vw, 4vw);
+      width: 100%;
+      height: 100%;
+      align-items: stretch;
+      justify-items: stretch;
+      transition: grid-template-columns 0.2s ease;
+    }
+    .events-grid[data-count="1"] {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .events-grid[data-count="2"] {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .events-grid[data-count="3"] {
+      grid-template-columns: repeat(auto-fit, minmax(28vw, 1fr));
     }
     .event-display {
-        flex: 1;
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        align-items: center;
-        text-align: center;
-        padding: 2vw;
-        min-width: 300px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      padding: clamp(1.5vw, 2.5vw, 3vw);
+      border-radius: 1.5vw;
+      border: 1px solid rgba(56, 189, 248, 0.2);
+      background: linear-gradient(165deg, rgba(15, 23, 42, 0.9), rgba(2, 8, 23, 0.95));
+      box-shadow: 0 25px 60px rgba(2, 6, 23, 0.55);
+      min-width: 0;
+      min-height: 0;
     }
     .event-name {
-      font-size: 3vw;
-      font-weight: bold;
+      font-size: clamp(1.8rem, 3.2vw, 4rem);
+      font-weight: 700;
       color: #38bdf8;
-      margin-bottom: 2vh;
+      margin-bottom: clamp(1vh, 2vh, 2.5vh);
+      text-shadow: 0 0 12px rgba(56, 189, 248, 0.35);
+      max-width: 95%;
+      overflow-wrap: anywhere;
     }
     .time {
-      font-size: 10vw;
       font-weight: 700;
       line-height: 1;
+      letter-spacing: 0.05em;
+      font-variant-numeric: tabular-nums;
+      font-size: clamp(3.2rem, 9vw, 11rem);
+    }
+    .events-grid[data-count="1"] .time {
+      font-size: clamp(5rem, 18vw, 22rem);
+    }
+    .events-grid[data-count="2"] .time {
+      font-size: clamp(4rem, 12vw, 16rem);
+    }
+    .events-grid[data-count="3"] .time {
+      font-size: clamp(3rem, 9vw, 11rem);
+    }
+    .time.long-duration {
+      font-size: clamp(2.5rem, 7vw, 9rem);
+    }
+    .events-grid[data-count="1"] .time.long-duration {
+      font-size: clamp(4rem, 14vw, 18rem);
+    }
+    .events-grid[data-count="2"] .time.long-duration {
+      font-size: clamp(3.3rem, 10vw, 13rem);
+    }
+    .events-grid[data-count="3"] .time.long-duration {
+      font-size: clamp(2.2rem, 6.4vw, 8rem);
     }
     .message {
-      font-size: 2.5vw;
-      margin-top: 3vh;
+      font-size: clamp(1.2rem, 2.4vw, 3rem);
+      margin-top: clamp(1.5vh, 2vh, 3vh);
       min-height: 4vh;
       color: #f97316;
       word-wrap: break-word;
+      max-width: 90%;
     }
     .time.hidden { display: none; }
-  .message.hidden { display: none; }
-  .image { margin-top: 3vh; display: none; }
-  .image img { max-width: 60vw; max-height: 35vh; border-radius: 1vw; box-shadow: 0 10px 30px rgba(15, 23, 42, 0.45); }
+    .message.hidden { display: none; }
+    .image {
+      margin-top: clamp(1.5vh, 3vh, 4vh);
+      display: none;
+      width: 100%;
+      max-height: 40vh;
+      align-items: center;
+      justify-content: center;
+    }
+    .image img {
+      width: 100%;
+      height: 100%;
+      max-width: min(70vw, 100%);
+      max-height: 100%;
+      object-fit: contain;
+      border-radius: 1.2vw;
+      box-shadow: 0 10px 30px rgba(15, 23, 42, 0.45);
+    }
+    .events-grid[data-count="1"] .image {
+      max-height: 45vh;
+    }
+    .events-grid[data-count="3"] .image {
+      max-height: 30vh;
+    }
   </style>
 </head>
 <body>
@@ -69,21 +136,117 @@
   <div id="events-grid" class="events-grid"></div>
 </div>
 <script>
+let audioContext = null;
+let lastBuzzerSequence = 0;
+const fitFrameMap = new WeakMap();
+let currentTimerCount = 0;
+
+function ensureAudioContext() {
+  if (audioContext && audioContext.state === 'suspended') {
+    audioContext.resume();
+    return;
+  }
+  if (!audioContext) {
+    const ctor = window.AudioContext || window.webkitAudioContext;
+    if (ctor) {
+      audioContext = new ctor();
+    }
+  }
+}
+
+function handleBuzzer(buzzerInfo) {
+  if (!buzzerInfo || !buzzerInfo.sequence) {
+    return;
+  }
+  if (buzzerInfo.sequence === lastBuzzerSequence) {
+    return;
+  }
+  lastBuzzerSequence = buzzerInfo.sequence;
+  playBuzzerSound(buzzerInfo);
+}
+
+function playBuzzerSound(buzzerInfo) {
+  ensureAudioContext();
+  if (!audioContext) {
+    return;
+  }
+  const now = audioContext.currentTime + 0.05;
+  const duration = buzzerInfo.mode === 'manual' ? 1.2 : 2.4;
+  const pattern = [920, 680, 520, 920];
+  const step = duration / pattern.length;
+
+  pattern.forEach((frequency, index) => {
+    const osc = audioContext.createOscillator();
+    const gain = audioContext.createGain();
+    const start = now + index * step;
+    const end = start + step;
+    osc.type = 'square';
+    osc.frequency.setValueAtTime(frequency, start);
+    gain.gain.setValueAtTime(0.0001, start);
+    gain.gain.exponentialRampToValueAtTime(0.35, start + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, end);
+    osc.connect(gain).connect(audioContext.destination);
+    osc.start(start);
+    osc.stop(end);
+  });
+}
+
+document.addEventListener('pointerdown', ensureAudioContext, { once: true });
+document.addEventListener('keydown', ensureAudioContext, { once: true });
+
+function scheduleTimeResize(card, timeEl) {
+  if (!card || !timeEl || timeEl.classList.contains('hidden')) {
+    return;
+  }
+  const pending = fitFrameMap.get(timeEl);
+  if (pending) {
+    cancelAnimationFrame(pending);
+  }
+  const frame = requestAnimationFrame(() => {
+    fitFrameMap.delete(timeEl);
+    fitTimeText(card, timeEl);
+  });
+  fitFrameMap.set(timeEl, frame);
+}
+
+function fitTimeText(card, timeEl) {
+  if (!card || !timeEl || timeEl.classList.contains('hidden')) {
+    return;
+  }
+  timeEl.style.fontSize = '';
+  const computed = getComputedStyle(timeEl);
+  const baseSize = parseFloat(computed.fontSize);
+  if (!baseSize || !card.clientWidth) {
+    return;
+  }
+  const availableWidth = card.clientWidth * 0.92;
+  const contentWidth = timeEl.scrollWidth;
+  if (!contentWidth) {
+    return;
+  }
+  const ratio = Math.min(1, availableWidth / contentWidth);
+  if (ratio < 0.99) {
+    timeEl.style.fontSize = (baseSize * ratio) + 'px';
+  }
+}
+
 function fetchState() {
   fetch('/api/state')
     .then(r => r.json())
     .then(data => {
       renderTimers(data.timers || {});
+      handleBuzzer(data.buzzer);
     });
 }
 
 function renderTimers(timers) {
   const grid = document.getElementById('events-grid');
   const timerIds = Object.keys(timers);
+  currentTimerCount = timerIds.length;
 
   if (timerIds.length === 0) {
     grid.dataset.mode = 'empty';
-    grid.style.flexDirection = 'column';
+    delete grid.dataset.count;
     grid.innerHTML = '';
     const empty = document.createElement('div');
     empty.className = 'event-display';
@@ -96,8 +259,7 @@ function renderTimers(timers) {
     grid.innerHTML = '';
     grid.dataset.mode = 'timers';
   }
-
-  grid.style.flexDirection = timerIds.length > 1 ? 'row' : 'column';
+  grid.dataset.count = timerIds.length;
 
   const existing = new Map();
   Array.from(grid.querySelectorAll('[data-timer-id]')).forEach(node => {
@@ -166,10 +328,15 @@ function updateCard(card, timer) {
 
   if (features.timer) {
     timeEl.textContent = timer.display_remaining || '';
+    const shouldShrink = Boolean(timer.long_duration && currentTimerCount > 1);
+    timeEl.classList.toggle('long-duration', shouldShrink);
     timeEl.classList.remove('hidden');
+    scheduleTimeResize(card, timeEl);
   } else {
     timeEl.textContent = '';
     timeEl.classList.add('hidden');
+    timeEl.classList.remove('long-duration');
+    timeEl.style.fontSize = '';
   }
 
   if (features.message) {

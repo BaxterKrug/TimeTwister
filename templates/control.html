@@ -124,7 +124,17 @@
 
 <script>
 let state = { timers: {} };
-const PRESETS = [50, 40, 30, 20, 10];
+const PRESETS = [
+  { label: 'Pokemon', minutes: 50 },
+  { label: 'Yu-Gi-Oh', minutes: 50 },
+  { label: 'Weiss', minutes: 30 },
+  { label: 'Godzilla', minutes: 30 },
+  { label: 'Gundam', minutes: 30 },
+  { label: 'UA', minutes: 30 },
+  { label: 'FAB', minutes: 55 },
+  { label: 'Riftbound', minutes: 50 },
+  { label: 'FF', minutes: 30 },
+];
 let fetchInterval;
 const MAX_IMAGE_SIZE = 3 * 1024 * 1024; // 3MB limit keeps uploads quick
 
@@ -204,8 +214,8 @@ function createEventCard(id) {
   card.className = 'event-card';
   card.dataset.timerId = id;
 
-  const featureButtonsMarkup = `${featureButton(id, 'timer', true, 'Timer')} ${featureButton(id, 'message', true, 'Announcements')}`;
-  const presetsMarkup = PRESETS.map(m => `<button onclick="startPreset(${id}, ${m})">${m}m</button>`).join('');
+  const featureButtonsMarkup = `${featureButton(id, 'timer', true, 'Timer')} ${featureButton(id, 'message', true, 'Announcements')} ${featureButton(id, 'buzzer', false, 'Auto Buzzer')}`;
+  const presetsMarkup = PRESETS.map(({label, minutes}) => `<button onclick="startPreset(${id}, ${minutes})" title="${minutes} minutes">${label} (${minutes}m)</button>`).join('');
 
   card.innerHTML = `
     <h3 class="event-title" data-role="header"></h3>
@@ -224,6 +234,7 @@ function createEventCard(id) {
         <button onclick="startTimer(${id})">Start</button>
         <button class="secondary" onclick="stopTimer(${id})">Pause</button>
         <button class="secondary" onclick="resetTimer(${id})">Reset</button>
+        <button class="secondary" onclick="playBuzzer(${id})">Play Buzzer</button>
       </div>
       <div class="row presets" data-role="timer-presets">
         <span>Presets:</span>
@@ -291,7 +302,7 @@ function updateEventCard(card, timer, id) {
     return;
   }
 
-  const features = Object.assign({ timer: true, message: true }, timer.features || {});
+  const features = Object.assign({ timer: true, message: true, buzzer: false }, timer.features || {});
   const labelValue = timer.label || '';
   const headerText = labelValue || 'New Event';
   refs.header.textContent = `Event: ${headerText}`;
@@ -302,6 +313,7 @@ function updateEventCard(card, timer, id) {
 
   updateFeatureButton(refs.featureButtons.timer, features.timer, 'Timer');
   updateFeatureButton(refs.featureButtons.message, features.message, 'Announcements');
+  updateFeatureButton(refs.featureButtons.buzzer, features.buzzer, 'Auto Buzzer');
 
   if (features.timer) {
     if (refs.timerControls) refs.timerControls.style.display = '';
@@ -414,6 +426,10 @@ function startTimer(id) {
 function startPreset(id, minutes) {
   const duration = minutes * 60;
   post('/api/timer/' + id + '/start', {duration});
+}
+
+function playBuzzer(id) {
+  post('/api/timer/' + id + '/buzzer');
 }
 
 function stopTimer(id) {

@@ -9,6 +9,7 @@ TimeTwister is a lightweight Flask application for running live events. It lets 
 - Manage up to three concurrent event timers with start, pause, reset, and preset controls.
 - Toggle announcements and timers on or off per event without deleting content.
 - Upload, preview, and display images alongside each event.
+- Built-in buzzer support with manual triggers and per-event auto buzz when timers expire.
 - Dedicated control dashboard (`/`) and display view (`/display`) designed for kiosk/projector setups.
 
 ## Prerequisites
@@ -100,11 +101,16 @@ The production setup assumes a Raspberry Pi (any 64-bit model running Raspberry 
 
 1. Use the **Add Event** button to create up to three events. Each event card contains:
    - **Event Name** field: updates immediately on blur.
-   - **Timer controls**: enter minutes and start, or use presets.
+    - **Timer controls**: enter minutes and start, or tap one of the built-in presets
+       (Pokemon, Yu-Gi-Oh, Weiss, Godzilla, Gundam, UA, FAB, Riftbound, FF) with the
+       configured tournament durations.
    - **Announcements**: type a quick message and click *Set*.
    - **Display Image**: upload a PNG/JPEG/GIF; click *Remove Image* to clear it.
-   - **Feature toggles**: disable timer or announcements without deleting data.
+    - **Feature toggles**: disable timer, announcements, or auto buzzer without deleting data.
+    - **Buzzer tools**: use *Play Buzzer* for a manual alert, or leave **Auto Buzzer** enabled
+       to fire automatically when the timer hits zero.
 2. The display view polls once per second to keep the timer and message current with minimal flicker.
+    - The first click or key press on the display page unlocks audio autoplay so the buzzer can play.
 3. Removing an event automatically clears any uploaded image associated with it.
 
 ## Updating Dependencies

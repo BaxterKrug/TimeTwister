@@ -16,11 +16,20 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 DEFAULT_FEATURES = {
     "timer": True,
     "message": True,
+    "buzzer": False,
 }
 
 # ------------ State ------------
 
-state = {"timers": {}}
+state = {
+    "timers": {},
+    "buzzer": {
+        "sequence": 0,
+        "timer_id": None,
+        "mode": None,
+        "timestamp": None,
+    },
+}
 
 # ------------ Helpers ------------
 
@@ -46,6 +55,26 @@ def ensure_features(timer):
             if key not in timer["features"]:
                 timer["features"][key] = default_value
     return timer["features"]
+
+
+def ensure_timer_meta(timer):
+    if "auto_buzzer_fired" not in timer:
+        timer["auto_buzzer_fired"] = False
+    return timer
+
+
+def trigger_buzzer(timer_id, mode):
+    buzzer_state = state.setdefault("buzzer", {
+        "sequence": 0,
+        "timer_id": None,
+        "mode": None,
+        "timestamp": None,
+    })
+    buzzer_state["sequence"] = buzzer_state.get("sequence", 0) + 1
+    buzzer_state["timer_id"] = timer_id
+    buzzer_state["mode"] = mode
+    buzzer_state["timestamp"] = time.time()
+    return buzzer_state
 
 
 def allowed_file(filename):
@@ -82,17 +111,30 @@ def api_state():
     timers_out = {}
     for tid, t in state["timers"].items():
         features = ensure_features(t).copy()
+        ensure_timer_meta(t)
+        remaining = get_remaining(t)
+        if t.get("running") and remaining == 0:
+            t["running"] = False
+            t["duration"] = 0
+            t["end_ts"] = None
+            if features.get("buzzer") and not t.get("auto_buzzer_fired"):
+                trigger_buzzer(tid, mode="auto")
+                t["auto_buzzer_fired"] = True
         timers_out[tid] = {
             "label": t["label"],
             "end_ts": t["end_ts"],
             "duration": t["duration"],
             "running": t["running"],
             "message": t["message"],
-            "display_remaining": format_seconds(get_remaining(t)),
+            "display_remaining": format_seconds(remaining),
+            "long_duration": remaining >= 3600,
             "features": features,
             "image_url": t.get("image_url"),
         }
-    return jsonify({"timers": timers_out})
+    return jsonify({
+        "timers": timers_out,
+        "buzzer": state.get("buzzer", {}),
+    })
 
 @app.route("/api/timers/add", methods=["POST"])
 def add_timer():
@@ -107,6 +149,7 @@ def add_timer():
             "features": DEFAULT_FEATURES.copy(),
             "image_filename": None,
             "image_url": None,
+            "auto_buzzer_fired": False,
         }
     return jsonify({"ok": True})
 
@@ -134,9 +177,11 @@ def api_timer_start(tid):
         duration = 0
     if tid in state["timers"]:
         now = time.time()
-        state["timers"][tid]["duration"] = duration
-        state["timers"][tid]["end_ts"] = now + duration
-        state["timers"][tid]["running"] = True
+        timer = state["timers"][tid]
+        timer["duration"] = duration
+        timer["end_ts"] = now + duration
+        timer["running"] = True
+        timer["auto_buzzer_fired"] = False
     return jsonify({"ok": True})
 
 @app.route("/api/timer/<tid>/stop", methods=["POST"])
@@ -151,9 +196,11 @@ def api_timer_stop(tid):
 @app.route("/api/timer/<tid>/reset", methods=["POST"])
 def api_timer_reset(tid):
     if tid in state["timers"]:
-        state["timers"][tid]["duration"] = 0
-        state["timers"][tid]["end_ts"] = None
-        state["timers"][tid]["running"] = False
+        timer = state["timers"][tid]
+        timer["duration"] = 0
+        timer["end_ts"] = None
+        timer["running"] = False
+        timer["auto_buzzer_fired"] = False
     return jsonify({"ok": True})
 
 @app.route("/api/timer/<tid>/message", methods=["POST"])
@@ -162,6 +209,16 @@ def api_message(tid):
     if tid in state["timers"]:
         state["timers"][tid]["message"] = data.get("message", "")[:256]
     return jsonify({"ok": True})
+
+
+@app.route("/api/timer/<tid>/buzzer", methods=["POST"])
+def api_timer_buzzer(tid):
+    timer = state["timers"].get(tid)
+    if not timer:
+        return jsonify({"error": "Timer not found"}), 404
+    ensure_timer_meta(timer)
+    trigger_buzzer(tid, mode="manual")
+    return jsonify({"ok": True, "buzzer": state["buzzer"]})
 
 @app.route("/api/timer/<tid>/feature", methods=["POST"])
 def api_timer_feature(tid):
