@@ -56,7 +56,7 @@ The production setup assumes a Raspberry Pi (any 64-bit model running Raspberry 
 2. **Clone and install**
 
    ```bash
-   git clone https://github.com/<your-account>/TimeTwister.git
+   git clone https://github.com/BaxterKrug/TimeTwister.git
    cd TimeTwister
    python3 -m venv .venv
    source .venv/bin/activate
