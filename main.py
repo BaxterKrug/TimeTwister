@@ -18,6 +18,7 @@ DEFAULT_FEATURES = {
     "message": True,
     "buzzer": False,
 }
+DEFAULT_BUZZER_VOLUME = 0.75
 
 # ------------ State ------------
 
@@ -29,6 +30,9 @@ state = {
         "mode": None,
         "timestamp": None,
     },
+    "settings": {
+        "buzzer_volume": DEFAULT_BUZZER_VOLUME,
+    },
 }
 
 # ------------ Helpers ------------
@@ -37,14 +41,15 @@ def get_remaining(timer):
     if not timer.get("running") or timer.get("end_ts") is None:
         return timer.get("duration", 0)
     remaining = int(timer["end_ts"] - time.time())
-    return max(0, remaining)
+    return remaining
 
 def format_seconds(sec):
-    m, s = divmod(int(sec), 60)
+    sign = '-' if sec < 0 else ''
+    m, s = divmod(abs(int(sec)), 60)
     h, m = divmod(m, 60)
     if h > 0:
-        return f"{h:02d}:{m:02d}:{s:02d}"
-    return f"{m:02d}:{s:02d}"
+        return f"{sign}{h:02d}:{m:02d}:{s:02d}"
+    return f"{sign}{m:02d}:{s:02d}"
 
 
 def ensure_features(timer):
@@ -113,13 +118,14 @@ def api_state():
         features = ensure_features(t).copy()
         ensure_timer_meta(t)
         remaining = get_remaining(t)
-        if t.get("running") and remaining == 0:
-            t["running"] = False
-            t["duration"] = 0
-            t["end_ts"] = None
-            if features.get("buzzer") and not t.get("auto_buzzer_fired"):
-                trigger_buzzer(tid, mode="auto")
-                t["auto_buzzer_fired"] = True
+        if (
+            t.get("running")
+            and remaining <= 0
+            and features.get("buzzer")
+            and not t.get("auto_buzzer_fired")
+        ):
+            trigger_buzzer(tid, mode="auto")
+            t["auto_buzzer_fired"] = True
         timers_out[tid] = {
             "label": t["label"],
             "end_ts": t["end_ts"],
@@ -127,6 +133,7 @@ def api_state():
             "running": t["running"],
             "message": t["message"],
             "display_remaining": format_seconds(remaining),
+            "overtime": remaining < 0,
             "long_duration": remaining >= 3600,
             "features": features,
             "image_url": t.get("image_url"),
@@ -134,7 +141,21 @@ def api_state():
     return jsonify({
         "timers": timers_out,
         "buzzer": state.get("buzzer", {}),
+        "settings": state.get("settings", {"buzzer_volume": DEFAULT_BUZZER_VOLUME}),
     })
+
+
+@app.route("/api/settings/buzzer-volume", methods=["POST"])
+def api_set_buzzer_volume():
+    data = request.get_json(force=True)
+    try:
+        volume = float(data.get("volume"))
+    except (TypeError, ValueError):
+        return jsonify({"error": "Invalid volume"}), 400
+    volume = max(0.0, min(1.0, volume))
+    settings = state.setdefault("settings", {})
+    settings["buzzer_volume"] = volume
+    return jsonify({"ok": True, "settings": settings})
 
 @app.route("/api/timers/add", methods=["POST"])
 def add_timer():
@@ -192,6 +213,20 @@ def api_timer_stop(tid):
         state["timers"][tid]["end_ts"] = None
         state["timers"][tid]["running"] = False
     return jsonify({"ok": True})
+
+
+@app.route("/api/timer/<tid>/resume", methods=["POST"])
+def api_timer_resume(tid):
+    timer = state["timers"].get(tid)
+    if not timer:
+        return jsonify({"error": "Timer not found"}), 404
+    if timer.get("running"):
+        return jsonify({"error": "Timer already running"}), 400
+    remaining = timer.get("duration", 0)
+    timer["end_ts"] = time.time() + remaining
+    timer["running"] = True
+    return jsonify({"ok": True})
+
 
 @app.route("/api/timer/<tid>/reset", methods=["POST"])
 def api_timer_reset(tid):

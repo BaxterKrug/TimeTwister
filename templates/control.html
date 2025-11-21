@@ -110,6 +110,40 @@
       border-color: #60a5fa;
     }
     .row.muted { color: #9ca3af; font-size: 0.85em; }
+    .global-controls {
+      display: flex;
+      justify-content: flex-start;
+      gap: 24px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+    .volume-control {
+      background: rgba(15, 23, 42, 0.85);
+      border: 1px solid rgba(56, 189, 248, 0.3);
+      border-radius: 12px;
+      padding: 12px 16px;
+      min-width: 260px;
+      box-shadow: 0 12px 30px rgba(2, 6, 23, 0.35);
+    }
+    .volume-labels {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+      text-transform: uppercase;
+      font-size: 0.85em;
+      letter-spacing: 0.08em;
+      color: #bfdbfe;
+    }
+    .volume-labels .value {
+      font-weight: 700;
+      color: #facc15;
+    }
+    #volume-slider {
+      width: 100%;
+      accent-color: #38bdf8;
+      cursor: pointer;
+    }
   </style>
 </head>
 <body>
@@ -118,12 +152,23 @@
         <h1>Event Control Panel</h1>
         <a href="/display" target="_blank">Go to Display</a>
     </div>
+  <div class="global-controls">
+    <div class="volume-control">
+      <div class="volume-labels">
+        <span class="label">Buzzer Volume</span>
+        <span id="volume-value" class="value">75%</span>
+      </div>
+      <input type="range" min="0" max="100" step="1" id="volume-slider">
+    </div>
+  </div>
     <div id="event-configs" class="event-configs"></div>
     <button id="add-event" onclick="addEvent()">+ Add Event</button>
 </div>
 
 <script>
-let state = { timers: {} };
+const DEFAULT_VOLUME = 0.75;
+let state = { timers: {}, settings: { buzzer_volume: DEFAULT_VOLUME } };
+let isAdjustingVolume = false;
 const PRESETS = [
   { label: 'Pokemon', minutes: 50 },
   { label: 'MTG', minutes: 45 },
@@ -163,7 +208,12 @@ function fetchState() {
   return fetch('/api/state')
     .then(r => r.json())
     .then(data => {
-      state = data;
+      state = data || {};
+      state.timers = state.timers || {};
+      const volume = state.settings && typeof state.settings.buzzer_volume === 'number'
+        ? state.settings.buzzer_volume
+        : DEFAULT_VOLUME;
+      state.settings = Object.assign({}, state.settings, { buzzer_volume: volume });
       render();
     });
 }
@@ -171,6 +221,7 @@ function fetchState() {
 function render() {
   const container = document.getElementById('event-configs');
   const ids = Object.keys(state.timers);
+  syncVolumeControls();
 
   if (ids.length === 0) {
     addEvent();
@@ -234,6 +285,7 @@ function createEventCard(id) {
         <input type="number" id="min_${id}" placeholder="e.g., 50" min="0" onfocus="stopFetching()" onblur="startFetching()">
         <button onclick="startTimer(${id})">Start</button>
         <button class="secondary" onclick="stopTimer(${id})">Pause</button>
+        <button class="secondary" onclick="resumeTimer(${id})">Resume</button>
         <button class="secondary" onclick="resetTimer(${id})">Reset</button>
         <button class="secondary" onclick="playBuzzer(${id})">Play Buzzer</button>
       </div>
@@ -437,6 +489,10 @@ function stopTimer(id) {
   post('/api/timer/' + id + '/stop');
 }
 
+function resumeTimer(id) {
+  post('/api/timer/' + id + '/resume');
+}
+
 function resetTimer(id) {
   post('/api/timer/' + id + '/reset');
 }
@@ -494,6 +550,68 @@ function clearImage(id) {
     .finally(() => startFetching());
 }
 
+function getBuzzerVolume() {
+  const volume = state.settings && typeof state.settings.buzzer_volume === 'number'
+    ? state.settings.buzzer_volume
+    : DEFAULT_VOLUME;
+  return Math.min(1, Math.max(0, volume));
+}
+
+function syncVolumeControls() {
+  const slider = document.getElementById('volume-slider');
+  if (!slider) {
+    return;
+  }
+  const pct = Math.round(getBuzzerVolume() * 100);
+  if (!isAdjustingVolume) {
+    slider.value = pct;
+  }
+  updateVolumeReadout(slider.value || pct);
+}
+
+function handleVolumeInput(event) {
+  isAdjustingVolume = true;
+  updateVolumeReadout(event.target.value);
+}
+
+function handleVolumeCommit(event) {
+  isAdjustingVolume = false;
+  const pct = Number(event.target.value);
+  updateVolumeReadout(pct);
+  setBuzzerVolume(pct / 100);
+}
+
+function updateVolumeReadout(value) {
+  const label = document.getElementById('volume-value');
+  if (!label) {
+    return;
+  }
+  const clamped = Math.max(0, Math.min(100, Math.round(value)));
+  label.textContent = clamped + '%';
+}
+
+function setBuzzerVolume(volume) {
+  post('/api/settings/buzzer-volume', {volume});
+}
+
+function initVolumeControls() {
+  const slider = document.getElementById('volume-slider');
+  if (!slider) {
+    return;
+  }
+  slider.value = Math.round(DEFAULT_VOLUME * 100);
+  updateVolumeReadout(slider.value);
+  slider.addEventListener('input', handleVolumeInput);
+  slider.addEventListener('change', handleVolumeCommit);
+  slider.addEventListener('pointerup', () => { isAdjustingVolume = false; });
+  slider.addEventListener('keyup', (event) => {
+    if (event.key === 'Enter' || event.key === ' ' || event.key === 'Tab') {
+      isAdjustingVolume = false;
+    }
+  });
+}
+
+initVolumeControls();
 startFetching();
 fetchState();
 </script>
