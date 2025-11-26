@@ -103,7 +103,7 @@ The production setup assumes a Raspberry Pi (any 64-bit model running Raspberry 
 1. Use the **Add Event** button to create up to three events. Each event card contains:
    - **Event Name** field: updates immediately on blur.
     - **Timer controls**: enter minutes and start, tap one of the built-in presets
-       (Pokemon, MTG, Yu-Gi-Oh, Weiss, Godzilla, Gundam, UA, FAB, Riftbound, FF) with the
+   (Pokemon, Pokemon (GLC), MTG, Yu-Gi-Oh, Weiss, Godzilla, Gundam, UA, FAB, Riftbound, FF) with the
        configured tournament durations, pause, resume, or reset without losing the remaining time.
    - **Announcements**: type a quick message and click *Set*.
    - **Display Image**: upload a PNG/JPEG/GIF; click *Remove Image* to clear it.
